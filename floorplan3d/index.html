@@ -374,6 +374,35 @@ body.cinema #stick{ display:none; }
 }
 #gateBar i{ display:block; height:100%; width:8%; background:var(--bronze); transition:width .3s var(--ease); }
 
+/* ---------- hide-the-cockpit control ---------- */
+#uiToggle{
+  position:absolute; left:14px; top:74px;
+  width:38px; height:38px; display:none;
+  place-items:center;
+  background:rgba(13,11,9,.85); border:1px solid var(--line-2);
+  color:var(--paper); font-size:16px; line-height:1; cursor:pointer;
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+}
+#uiToggle:focus-visible{ outline:2px solid var(--bronze); outline-offset:2px; }
+body.touch #uiToggle{ display:grid; }
+body.minimal #index,
+body.minimal #tools,
+body.minimal #planWrap,
+body.minimal #legend,
+body.minimal #rail{ display:none; }
+body.cinema #uiToggle{ display:none; }
+
+/* ---------- boot failure: say what happened instead of dying quietly ---------- */
+#gate.failed #gateTag{ color:#C8705A; }
+#gate.failed #gateRule{ background:#C8705A; }
+#gate.failed #gateNote{ color:var(--paper); }
+#gateNote code{
+  display:block; margin-top:12px; padding:9px 11px;
+  background:rgba(239,232,221,.06); border-left:2px solid #C8705A;
+  font-family:var(--mono); font-size:10.5px; line-height:1.6;
+  color:var(--muted); text-align:left; word-break:break-word;
+}
+
 /* ---------- 9:16: strip the cockpit back to what a reel needs ---------- */
 body.vertical #index,
 body.vertical #legend{ display:none; }
@@ -393,10 +422,27 @@ body.vertical #toast{ bottom:24px; }
 }
 @media (max-width: 620px){
   #specs .cell:nth-child(n+4){ display:none; }
-  #tools{ width:150px; padding:10px; }
-  #planWrap{ padding:8px 8px 6px; }
-  #plan{ width:78px; }
-  #rail .brandmark{ font-size:13px; }
+  #specs .cell{ padding:0 9px; }
+  #specs .k{ font-size:8.5px; letter-spacing:.1em; }
+  #specs .v{ font-size:11.5px; }
+  #rail{ padding:8px 10px 14px; overflow:hidden; }
+  #rail .brandmark{ font-size:12px; gap:6px; }
+  #tools{ width:136px; padding:9px; gap:10px; right:11px; top:66px; }
+  .grp > .lbl{ font-size:8.5px; letter-spacing:.1em; margin-bottom:6px; }
+  .grp > .lbl b{ font-size:11px; }
+  .tg{ font-size:10px; padding:6px 2px; }
+  .tourBtn{ font-size:11px; padding:9px 4px; letter-spacing:.06em; }
+  .toggles{ gap:5px; }
+  #planWrap{ padding:7px 7px 5px; right:11px; bottom:11px; }
+  #plan{ width:66px; }
+  #planFoot{ font-size:8px; }
+  #uiToggle{ top:66px; left:11px; }
+  #stick{ left:18px; bottom:18px; width:104px; height:104px; }
+  #stick i{ width:40px; height:40px; margin:-20px 0 0 -20px; }
+}
+@media (max-width: 400px){
+  #rail .brandmark span,
+  #specs .cell:nth-child(n+3){ display:none; }
 }
 @media (prefers-reduced-motion: reduce){
   *{ transition-duration:.001ms !important; }
@@ -412,7 +458,7 @@ body.vertical #toast{ bottom:24px; }
 
     <div id="hud">
       <header id="rail">
-        <div class="brandmark"><i></i>東向き1R ウォークスルー</div>
+        <div class="brandmark"><i></i><span>東向き1R ウォークスルー</span></div>
         <div id="specs">
           <div class="cell"><span class="k">MADORI</span><span class="v">1R</span></div>
           <div class="cell"><span class="k">SENYU</span><span class="v">26.40<em>m²</em></span></div>
@@ -458,9 +504,10 @@ body.vertical #toast{ bottom:24px; }
 
       <div id="planWrap" class="panel">
         <canvas id="plan" width="264" height="640"></canvas>
-        <div id="planFoot"><span>1R / 26.40m²</span><em>バルコニー = 東</em></div>
+        <div id="planFoot"><span>26.40m²</span><em>東 ↓</em></div>
       </div>
 
+      <button id="uiToggle" aria-pressed="false" title="UI の表示切替">⊖</button>
       <div id="reticle"></div>
       <div id="stick"><i></i></div>
       <div id="toast"></div>
@@ -484,6 +531,47 @@ body.vertical #toast{ bottom:24px; }
   <div id="gateBar"><i></i></div>
 </div>
 
+<script>
+/* Bootstrap. Runs before three.js and before any scene work, so the start
+   button always answers a tap - even if the renderer never comes up. */
+(function(){
+  var gate = document.getElementById('gate');
+  var btn  = document.getElementById('enter');
+  var note = document.getElementById('gateNote');
+  var bar  = document.getElementById('gateBar');
+  var failed = false;
+  window.__ready = false;
+
+  window.__fail = function(msg, detail){
+    if (failed) return;
+    failed = true;
+    gate.classList.remove('gone');
+    gate.classList.add('failed');
+    note.innerHTML = msg + (detail ? '<code>' + String(detail).slice(0, 220) + '</code>' : '');
+    btn.textContent = '再読み込み';
+    if (bar) bar.style.display = 'none';
+  };
+
+  btn.addEventListener('click', function(){
+    if (failed){ location.reload(); return; }
+    if (window.__ready){ window.__enter(); return; }
+    window.__fail('3D の初期化が終わっていません。端末が WebGL に対応していないか、メモリ不足の可能性があります。',
+                  '起動シーケンスが完了しませんでした');
+  });
+
+  window.addEventListener('error', function(e){
+    if (!window.__ready) window.__fail('3D の初期化中にエラーが発生しました。', e.message);
+  });
+
+  try{
+    var c = document.createElement('canvas');
+    if (!(c.getContext('webgl') || c.getContext('experimental-webgl')))
+      window.__fail('このブラウザで WebGL が利用できません。別のブラウザか、省データ／省電力モードの解除をお試しください。', '');
+  }catch(err){
+    window.__fail('WebGL の確認中にエラーが発生しました。', err && err.message);
+  }
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 "use strict";
@@ -523,7 +611,7 @@ const Z = {                             // zone rectangles  x0,z0,x1,z1
 };
 
 const ROOMS = [
-  { id:'genkan',  name:'玄関',        dim:'2.6㎡',   pos:[2.35,0.62], yaw:Math.PI },
+  { id:'genkan',  name:'玄関',        dim:'2.6㎡',   pos:[1.92,0.55], yaw:Math.PI },
   { id:'vanity',  name:'洗面脱衣',    dim:'1.1㎡',   pos:[1.72,1.92], yaw:Math.PI*0.5 },
   { id:'bath',    name:'浴室',        dim:'1216',    pos:[0.62,2.62], yaw:Math.PI },
   { id:'kitchen', name:'キッチン',    dim:'2口',     pos:[1.95,3.55], yaw:-Math.PI*0.5 },
@@ -682,8 +770,17 @@ function concreteTexture(){
 /* ================= renderer / scene ================= */
 const canvas = document.getElementById('view');
 const frameEl = document.getElementById('frame');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+/* Phones get a smaller budget for everything: resolution, shadow resolution,
+   how many point lights the fragment shader has to loop over, and how much
+   city sits outside the window. Mobile GPUs report as few as 224 fragment
+   uniform vectors, and a scene with a dozen point lights fails to link. */
+const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const MOBILE = IS_TOUCH && Math.min(screen.width, screen.height) < 900;
+const LIGHT_POOL = MOBILE ? 2 : 4;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MOBILE ? 1.5 : 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
@@ -692,7 +789,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 MAXA = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x9FB3C4, 46, 240);
+scene.fog = new THREE.Fog(0x9FB3C4, 80, 420);
 
 const camera = new THREE.PerspectiveCamera(66, 1, 0.035, 600);
 camera.rotation.order = 'YXZ';
@@ -711,7 +808,7 @@ scene.add(sky);
 /* ---- lights ---- */
 const sun = new THREE.DirectionalLight(0xffffff, 2.6);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048);
 sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 90;
 sun.shadow.camera.left = -9; sun.shadow.camera.right = 9;
@@ -729,21 +826,49 @@ const bounce = new THREE.PointLight(0xFFE9CE, 0.5, 9, 2);
 bounce.position.set(W/2, 1.5, D - 0.9);
 scene.add(bounce);
 
-const interiorLights = [];
+/* Every fixture in the flat is a definition, not a light. A fixed pool of
+   LIGHT_POOL real lights is re-pointed at the nearest definitions as you
+   walk, so the shader's light count never changes and never grows. */
+const LAMPS = [];
 function lamp(x, y, z, color, intensity, dist){
-  const l = new THREE.PointLight(color, 0, dist || 5.2, 2);
-  l.position.set(x, y, z);
-  l.userData.max = intensity;
-  interiorLights.push(l);
+  LAMPS.push({ x, y, z, color:new THREE.Color(color), max:intensity, dist:dist || 5.2, d:0 });
+}
+const POOL = [];
+for (let i = 0; i < LIGHT_POOL; i++){
+  const l = new THREE.PointLight(0xFFD9A8, 0, 5.5, 2);
+  l.position.set(W/2, CH - 0.2, D/2);
   scene.add(l);
-  return l;
+  POOL.push(l);
+}
+let poolAcc = 1;
+function updatePool(dt, px, pz){
+  poolAcc += dt;
+  if (poolAcc < 0.2) return;
+  poolAcc = 0;
+  for (let i = 0; i < LAMPS.length; i++){
+    const L = LAMPS[i], dx = L.x - px, dz = L.z - pz;
+    L.d = dx*dx + dz*dz;
+  }
+  LAMPS.sort((a, b) => a.d - b.d);
+  for (let i = 0; i < POOL.length; i++){
+    const l = POOL[i], src = LAMPS[i];
+    if (!src){ l.intensity = 0; continue; }
+    l.position.set(src.x, src.y, src.z);
+    l.color.copy(src.color);
+    l.distance = src.dist;
+    l.intensity = src.max * lightBlend;
+  }
 }
 
 /* ---- environment map, rebuilt when the hour changes ---- */
-const pmrem = new THREE.PMREMGenerator(renderer);
-pmrem.compileEquirectangularShader();
+let pmrem = null;
+try{
+  pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+}catch(e){ pmrem = null; }
 let envRT = null;
 function rebuildEnv(topHex, botHex, sunHex, up){
+  if (!pmrem) return;
   try{
     const c = document.createElement('canvas');
     c.width = 128; c.height = 64;
@@ -753,7 +878,7 @@ function rebuildEnv(topHex, botHex, sunHex, up){
     g.fillStyle = gr; g.fillRect(0,0,128,64);
     const sx = 64 + Math.sin(up.az) * 40;
     const sy = 32 - up.el * 30;
-    const sg = g.createRadialGradient(sx, sy, 0, sx, sy, 22);
+    const sg = g.createRadialGradient(sx, sy, 0, sx, sy, 11);
     sg.addColorStop(0, sunHex); sg.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = sg; g.fillRect(0,0,128,64);
     const t = new THREE.CanvasTexture(c);
@@ -785,7 +910,7 @@ const M = {
   linenDk  : new THREE.MeshStandardMaterial({ map:linenTexture('#8C8377'), roughness:0.94 }),
   rug      : new THREE.MeshStandardMaterial({ map:linenTexture('#9C8E7B'), roughness:0.98 }),
   concrete : new THREE.MeshStandardMaterial({ map:concreteTexture(), color:0x8E8B85, roughness:0.92 }),
-  glass    : new THREE.MeshPhysicalMaterial({ color:0xCBE0EA, roughness:0.03, metalness:0, transparent:true, opacity:0.17, envMapIntensity:1.6, side:THREE.DoubleSide }),
+  glass    : new THREE.MeshStandardMaterial({ color:0xCBE0EA, roughness:0.30, metalness:0.0, transparent:true, opacity:0.15, envMapIntensity:0.35, side:THREE.DoubleSide }),
   mirror   : new THREE.MeshStandardMaterial({ color:0xC9D2D6, roughness:0.06, metalness:0.95 }),
   screen   : new THREE.MeshStandardMaterial({ color:0x0B0C0E, roughness:0.18, metalness:0.4 }),
   green    : new THREE.MeshStandardMaterial({ color:C.greenery, roughness:0.85 })
@@ -1201,15 +1326,17 @@ const sash = (function(){
 
   // ラグ・グリーン・フロアランプ
   slab(g, 1.44, 6.05, 2.78, 7.62, 0.004, 0.018, M.rug, true);
-  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.30, 16), M.stone);
-  pot.position.set(0.36, 0.15, 7.86); pot.castShadow = true; g.add(pot);
-  for(let i=0;i<9;i++){
-    const leaf = new THREE.Mesh(new THREE.SphereGeometry(rnd(0.11,0.20), 8, 6), M.green);
-    leaf.position.set(0.36 + rnd(-0.18,0.18), 0.44 + i*0.09, 7.86 + rnd(-0.18,0.18));
-    leaf.scale.y = 0.55; leaf.castShadow = true; g.add(leaf);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.09, 0.24, 14), M.stone);
+  pot.position.set(0.36, 0.12, 7.86); pot.castShadow = true; g.add(pot);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.019,0.52,6), M.darkWood);
+  stem.position.set(0.36, 0.46, 7.86); g.add(stem);
+  for(let i=0;i<7;i++){
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(rnd(0.065,0.115), 7, 5), M.green);
+    leaf.position.set(0.36 + rnd(-0.13,0.13), 0.50 + i*0.055 + rnd(-0.02,0.02), 7.86 + rnd(-0.13,0.13));
+    leaf.scale.set(1, 0.42, 1);
+    leaf.rotation.z = rnd(-0.5, 0.5);
+    leaf.castShadow = true; g.add(leaf);
   }
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.025,0.9,8), M.darkWood);
-  stem.position.set(0.36, 0.72, 7.86); g.add(stem);
 
   const fl = new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,1.5,10), M.bronze);
   fl.position.set(2.94, 0.75, 7.92); fl.castShadow = true; g.add(fl);
@@ -1220,12 +1347,14 @@ const sash = (function(){
 
   // カーテン — sheer inside, linen drape outside
   slab(g, 0.14, D-0.19, 2.86, D-0.16, 2.24, 2.32, M.bronze);
+  const FOLDS = MOBILE ? 13 : 18;
   for(let i=0;i<2;i++){
-    const x0 = i ? 2.06 : 0.16, x1 = i ? 2.84 : 0.94;
-    for(let k=0;k<9;k++){
-      const cx = x0 + (x1-x0)*(k/8);
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 2.16, 7, 1, true), M.linen);
-      p.position.set(cx, 1.16, D - 0.185 + (k%2 ? 0.022 : -0.022));
+    const x0 = i ? 2.30 : 0.16, x1 = i ? 2.84 : 0.70;
+    for(let k=0;k<FOLDS;k++){
+      const cx = x0 + (x1-x0) * (k/(FOLDS-1)) + rnd(-0.008, 0.008);
+      const r  = rnd(0.019, 0.030);
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(r*0.78, r, 2.16, 6, 1, true), M.linen);
+      p.position.set(cx, 1.16, D - 0.185 + (k%2 ? 0.026 : -0.026) + rnd(-0.006,0.006));
       p.castShadow = true; p.receiveShadow = true;
       g.add(p);
     }
@@ -1241,7 +1370,7 @@ const sash = (function(){
   solid(2.68, 4.72, 3.20, 5.84, 'desk');
   solid(2.28, 5.04, 2.74, 5.50, 'chair');
   solid(2.82, 6.34, 3.20, 7.54, 'tvboard');
-  solid(0.18, 7.68, 0.54, 8.04, 'plant');
+  solid(0.22, 7.72, 0.50, 8.00, 'plant');
   solid(2.80, 7.78, 3.08, 8.06, 'floorlamp');
 
   lamp(1.55, CH-0.18, 6.30, 0xFFDCB0, 0.85, 5.4);
@@ -1272,7 +1401,7 @@ const sash = (function(){
 (function city(){
   const g = new THREE.Group();
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ color:0x3B3A38, roughness:1 }));
-  ground.rotation.x = -Math.PI/2; ground.position.set(W/2, -34, D);
+  ground.rotation.x = -Math.PI/2; ground.position.set(W/2, -20, D);
   g.add(ground);
 
   const winTex = tex(64, 128, (c,w,h)=>{
@@ -1286,14 +1415,17 @@ const sash = (function(){
   const nightMat= new THREE.MeshStandardMaterial({ color:0x2A2F38, roughness:0.6, emissiveMap:winTex, emissive:0xFFD9A0, emissiveIntensity:0 });
   cityMats.push(nightMat);
 
-  for(let i=0;i<64;i++){
-    const ang = rnd(-1.15, 1.15);                 // fanned out east of the balcony
-    const dist = rnd(26, 210);
-    const h = rnd(9, 62) * (dist > 90 ? 1.5 : 1);
-    const bw = rnd(8, 26), bd = rnd(8, 26);
+  /* The unit reads as roughly 18 m up, so the skyline has to rise above eye
+     level - otherwise the balcony looks out onto nothing but sky. */
+  const BASE = -20;
+  for(let i=0, n=(MOBILE?34:90); i<n; i++){
+    const ang  = rnd(-0.95, 0.95);                // fanned across the outlook, east
+    const dist = rnd(58, 230);
+    const h    = rnd(9, 16) + dist * rnd(0.05, 0.20);   // nothing tall stands close
+    const bw = rnd(9, 24), bd = rnd(9, 24);
     const mat = (i % 3 === 0) ? dayMat : nightMat;
     const b = new THREE.Mesh(new THREE.BoxGeometry(bw, h, bd), mat);
-    b.position.set(W/2 + Math.sin(ang)*dist*rnd(-1,1), -34 + h/2, D + Math.cos(ang)*dist);
+    b.position.set(W/2 + Math.sin(ang)*dist, BASE + h/2, D + Math.cos(ang)*dist);
     b.rotation.y = rnd(0, 1.5);
     g.add(b);
   }
@@ -1319,8 +1451,8 @@ function labelSprite(text, sub){
   g.fillText(sub, 488, 84);
   const t = new THREE.CanvasTexture(c);
   t.encoding = THREE.sRGBEncoding;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthTest:false, opacity:0.92 }));
-  s.scale.set(1.28, 0.40, 1);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false, opacity:0.9 }));
+  s.scale.set(0.98, 0.31, 1);
   return s;
 }
 [['玄関','2.6m²',2.30,0.60,1.55],
@@ -1401,7 +1533,7 @@ function applyHour(h, heavy){
   const daylight = clamp(si / 2.4, 0, 1);
   const autoLamp = clamp(1 - daylight, 0, 1);
   lightBlend = manualLight ? Math.max(0.85, autoLamp) : autoLamp;
-  interiorLights.forEach(l => { l.intensity = l.userData.max * lightBlend; });
+  poolAcc = 1;                                   // re-aim the lamp pool next frame
   cityMats.forEach(m => { m.emissiveIntensity = clamp(1.15 - daylight * 1.5, 0, 1.15); });
 
   document.getElementById('clock').textContent =
@@ -1413,7 +1545,7 @@ function applyHour(h, heavy){
 /* ==================================================================
    player
 ================================================================== */
-const P = { x:2.35, z:0.50, yaw:Math.PI, pitch:-0.04, vx:0, vz:0, bob:0, gy:-STEP, eye:1.62 };
+const P = { x:1.92, z:0.55, yaw:Math.PI, pitch:-0.04, vx:0, vz:0, bob:0, gy:-STEP, eye:1.62 };
 const RAD = 0.25;
 const keys = Object.create(null);
 let touchMode = false, cinema = false, running = false;
@@ -1624,7 +1756,7 @@ function drawPlan(){
    自動内覧ツアー — a scripted 44-second take, shot to be recorded
 ================================================================== */
 const TOUR = [
-  { p:[2.36,0.42], y:Math.PI,        t:-0.10, d:5.0, k:'01 / ENTRANCE', m:'玄関を、上がる。',            s:'上がり框 150 ・ 下足入れ H1750' },
+  { p:[2.10,0.38], y:Math.PI*0.94,   t:-0.10, d:5.0, k:'01 / ENTRANCE', m:'玄関を、上がる。',            s:'上がり框 150 ・ 下足入れ H1750' },
   { p:[2.14,1.72], y:Math.PI*0.74,   t:-0.04, d:5.0, k:'02 / SANITARY', m:'水まわりは、一列に。',        s:'独立トイレ ／ 洗面脱衣 ／ 浴室' },
   { p:[1.74,2.52], y:Math.PI*0.5,    t: 0.00, d:4.5, k:'03 / BATH',     m:'浴槽は1216。足が伸ばせる。', s:'浴室内寸 1.25m × 1.60m' },
   { p:[1.88,3.34], y:-Math.PI*0.5,   t:-0.02, d:5.0, k:'04 / KITCHEN',  m:'2口コンロ、間口1800。',      s:'背面に冷蔵庫置場・洗濯機置場' },
@@ -1835,7 +1967,22 @@ addEventListener('resize', resize);
 
 const clock = new THREE.Clock();
 const reticle = el('reticle');
-let planAcc = 0;
+let planAcc = 0, looping = false;
+
+/* If a device cannot hold ~24fps, give back resolution rather than smoothness. */
+const basePR = renderer.getPixelRatio();
+let perfAcc = 0, perfN = 0, perfStep = 0;
+function adapt(dt){
+  perfAcc += dt; perfN++;
+  if (perfN < 90) return;
+  const avg = perfAcc / perfN;
+  perfAcc = 0; perfN = 0;
+  if (avg > 0.042 && perfStep < 2){
+    perfStep++;
+    renderer.setPixelRatio(Math.max(0.7, basePR * (perfStep === 1 ? 0.72 : 0.5)));
+    resize();
+  }
+}
 
 function frame(){
   requestAnimationFrame(frame);
@@ -1845,11 +1992,20 @@ function frame(){
   if (running) stepTour(dt); else bob = stepPlayer(dt);
   stepDoors(dt);
 
+  updatePool(dt, P.x, P.z);
+
   camera.position.set(P.x, P.gy + P.eye + bob, P.z);
   camera.rotation.y = P.yaw;
   camera.rotation.x = P.pitch;
   sky.position.copy(camera.position);
 
+  for (let i = 0; i < labels.children.length; i++){
+    const sp = labels.children[i];
+    const dd = Math.hypot(sp.position.x - P.x, sp.position.z - P.z);
+    sp.visible = dd > 1.45 && dd < 9.5;
+  }
+
+  adapt(dt);
   planAcc += dt;
   if (planAcc > 0.05){ planAcc = 0; drawPlan(); updateHere(); }
 
@@ -1867,20 +2023,25 @@ applyHour(8, true);
 drawPlan();
 updateHere();
 
-const gate = el('gate'), gateBar = el('gateBar').firstElementChild;
-let boot = 0;
-const bootTimer = setInterval(()=>{
-  boot = Math.min(100, boot + 14 + Math.random() * 22);
-  gateBar.style.width = boot + '%';
-  if (boot >= 100) clearInterval(bootTimer);
-}, 90);
+const gate = el('gate');
+el('gateBar').firstElementChild.style.width = '100%';
+if (IS_TOUCH) document.body.classList.add('touch');
 
-el('enter').addEventListener('click', ()=>{
-  gate.classList.add('gone');
-  if (!('ontouchstart' in window) && canvas.requestPointerLock) canvas.requestPointerLock();
-  setTimeout(()=> toast('WASD で移動 / ドアは近づくと開きます'), 900);
+el('uiToggle').addEventListener('click', ()=>{
+  const on = document.body.classList.toggle('minimal');
+  el('uiToggle').setAttribute('aria-pressed', String(on));
+  el('uiToggle').textContent = on ? '⊕' : '⊖';
 });
-if ('ontouchstart' in window) document.body.classList.add('touch');
 
-frame();
+window.__enter = function(){
+  gate.classList.add('gone');
+  if (!IS_TOUCH && canvas.requestPointerLock) canvas.requestPointerLock();
+  if (!looping){
+    looping = true;
+    clock.getDelta();                            // discard the load-time gap
+    frame();
+  }
+  setTimeout(()=> toast(IS_TOUCH ? '左下スティックで移動 / 画面ドラッグで視点' : 'WASD で移動 / ドアは近づくと開きます'), 900);
+};
+window.__ready = true;
 </script>
